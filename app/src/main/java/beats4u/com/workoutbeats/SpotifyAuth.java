@@ -42,6 +42,7 @@ public class SpotifyAuth extends Activity implements
     // Request code that will be used to verify if the result comes from correct activity
     // Can be any integer
     private static final int REQUEST_CODE = 1337;
+    private static final String TAG = "SpotifiyAuth";
 
     private Player mPlayer;
 
@@ -100,6 +101,8 @@ public class SpotifyAuth extends Activity implements
             float roll = (float) Math.toDegrees(Quaternion.roll(rotation));
             float pitch = (float) Math.toDegrees(Quaternion.pitch(rotation));
             float yaw = (float) Math.toDegrees(Quaternion.yaw(rotation));
+            //Log.d(TAG, "roll: " + roll + "pitch: " + pitch + "yaw: " + yaw);
+            Log.d(TAG, "x: " + rotation.x() + " y: " + rotation.y() +  " z: " + rotation.z());
 
             // Adjust roll and pitch for the orientation of the Myo on the arm.
             if (myo.getXDirection() == XDirection.TOWARD_ELBOW) {
