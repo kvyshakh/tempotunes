@@ -223,7 +223,7 @@ public class MyoGlassService extends Service {
 
             for (final MotionEvent event : events) {
                 // Post the event dispatch to a background thread, as sendPointerSync can not be
-                // called from the main_menu.xml thread.
+                // called from the menu_main.xml thread.
                 mExecutor.submit(new Runnable() {
                     @Override
                     public void run() {

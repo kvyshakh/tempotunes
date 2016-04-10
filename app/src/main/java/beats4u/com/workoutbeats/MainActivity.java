@@ -1,14 +1,17 @@
 package beats4u.com.workoutbeats;
 
-import android.app.Activity;
 import android.content.Intent;
 import android.graphics.Color;
+import android.graphics.drawable.Drawable;
+import android.os.AsyncTask;
 import android.os.Bundle;
+import android.support.v7.app.AppCompatActivity;
 import android.util.Log;
 import android.view.Menu;
 import android.view.MenuInflater;
 import android.view.MenuItem;
 import android.view.View;
+import android.widget.ImageView;
 import android.widget.TextView;
 import android.widget.Toast;
 
@@ -29,15 +32,18 @@ import com.thalmic.myo.Arm;
 import com.thalmic.myo.DeviceListener;
 import com.thalmic.myo.Hub;
 import com.thalmic.myo.Myo;
-import com.thalmic.myo.Pose;
 import com.thalmic.myo.Quaternion;
 import com.thalmic.myo.XDirection;
 import com.thalmic.myo.scanner.ScanActivity;
 
+import org.json.JSONObject;
+
+import java.io.InputStream;
+import java.net.URL;
 import java.util.Timer;
 import java.util.TimerTask;
 
-public class SpotifyAuth extends Activity implements
+public class MainActivity extends AppCompatActivity implements
         PlayerNotificationCallback, ConnectionStateCallback {
 
     // TODO: Replace with your client ID
@@ -48,46 +54,56 @@ public class SpotifyAuth extends Activity implements
     // Can be any integer
     private static final int REQUEST_CODE = 1337;
     private static final String TAG = "SpotifiyAuth";
-    private static final double WALKING_TIME = 40;
-    private static final double JOGGING_TIME = 60;
-    private static final double RUNNING_TIME = 80;
+    private static final double WALKING_TIME = 30;
+    private static final double RUNNING_TIME = 100;
+    private static final long WAKEUP_INTERVAL = 5000;
+    private static String curr_track_id = "3GTXok0dIm0mMqBiVklBYS";
 
     private Player mPlayer;
 
-    private TextView mTextView;
-    private TextView mLockStateView;
-    private TextView myNumber;
-    private TextView myMax, myMin;
+    private TextView titleView;
+    private ImageView imageView;
     private double t = 0;
-    private int t_max = 500;
 
     //stores most recent min and max values
     private static double min_val = 90;
     private static double max_val = -90;
 
     private double diffForSong;
+    private boolean workoutStarted = false;
 
-    // For Myo
+    private ImageView statusImage;
+    private boolean connected = false;
+
+    Drawable tempImageSrc;
+
+    private enum Mode  {
+        WALKING, JOGGING, RUNNING, DEFAULT
+    }
+
+    private static Mode mode = Mode.DEFAULT;
+    TimerTask timerTask;
+
+        // For Myo
     private DeviceListener mlistener =  new AbstractDeviceListener() {
         // onConnect() is called whenever a Myo has been connected.
         @Override
         public void onConnect(Myo myo, long timestamp) {
-            // Set the text color of the text view to cyan when a Myo connects.
-            mTextView.setTextColor(Color.CYAN);
+            statusImage.setImageResource(R.drawable.green_light);
+            statusImage.bringToFront();
         }
 
         // onDisconnect() is called whenever a Myo has been disconnected.
         @Override
         public void onDisconnect(Myo myo, long timestamp) {
-            // Set the text color of the text view to red when a Myo disconnects.
-            mTextView.setTextColor(Color.RED);
+            statusImage.setImageResource(R.drawable.red_light);
+            statusImage.bringToFront();
         }
 
         // onArmSync() is called whenever Myo has recognized a Sync Gesture after someone has put it on their
         // arm. This lets Myo know which arm it's on and which way it's facing.
         @Override
         public void onArmSync(Myo myo, long timestamp, Arm arm, XDirection xDirection) {
-            mTextView.setText(myo.getArm() == Arm.LEFT ? R.string.arm_left : R.string.arm_right);
         }
 
         // onArmUnsync() is called whenever Myo has detected that it was moved from a stable position on a person's arm after
@@ -95,27 +111,29 @@ public class SpotifyAuth extends Activity implements
         // when Myo is moved around on the arm.
         @Override
         public void onArmUnsync(Myo myo, long timestamp) {
-            mTextView.setText(R.string.hello_world);
         }
 
         // onUnlock() is called whenever a synced Myo has been unlocked. Under the standard locking
         // policy, that means poses will now be delivered to the listener.
         @Override
         public void onUnlock(Myo myo, long timestamp) {
-            mLockStateView.setText(R.string.unlocked);
+            titleView.setText(R.string.unlocked);
         }
 
         // onLock() is called whenever a synced Myo has been locked. Under the standard locking
         // policy, that means poses will no longer be delivered to the listener.
         @Override
         public void onLock(Myo myo, long timestamp) {
-            mLockStateView.setText(R.string.locked);
+            titleView.setText(R.string.locked);
         }
 
         // onOrientationData() is called whenever a Myo provides its current orientation,
         // represented as a quaternion.
         @Override
         public void onOrientationData(Myo myo, long timestamp, Quaternion rotation) {
+            if (! connected) {
+                connected = true;
+            }
             // Calculate Euler angles (roll, pitch, and yaw) from the quaternion.
             float roll = (float) Math.toDegrees(Quaternion.roll(rotation));
             float pitch = (float) Math.toDegrees(Quaternion.pitch(rotation));
@@ -133,11 +151,7 @@ public class SpotifyAuth extends Activity implements
                 max_val = pitch;
             }
 
-            myNumber.setText(pitch + "");
-            myMax.setText("" + min_val);
-            myMin.setText("" + max_val);
-
-            xSeries.appendData(new DataPoint(t, pitch), true, t_max);
+            //xSeries.appendData(new DataPoint(t, pitch), true, t_max);
             t += 1;
 
             // Adjust roll and pitch for the orientation of the Myo on the arm.
@@ -147,56 +161,6 @@ public class SpotifyAuth extends Activity implements
             }
         }
 
-        // onPose() is called whenever a Myo provides a new pose.
-        @Override
-        public void onPose(Myo myo, long timestamp, Pose pose) {
-            // Handle the cases of the Pose enumeration, and change the text of the text view
-            // based on the pose we receive.
-            switch (pose) {
-                case UNKNOWN:
-                    mTextView.setText(getString(R.string.hello_world));
-                    break;
-                case REST:
-                case DOUBLE_TAP:
-                    int restTextId = R.string.hello_world;
-                    switch (myo.getArm()) {
-                        case LEFT:
-                            restTextId = R.string.arm_left;
-                            break;
-                        case RIGHT:
-                            restTextId = R.string.arm_right;
-                            break;
-                    }
-                    mTextView.setText(getString(restTextId));
-                    break;
-                case FIST:
-                    mTextView.setText(getString(R.string.pose_fist));
-                    break;
-                case WAVE_IN:
-                    mTextView.setText(getString(R.string.pose_wavein));
-                    break;
-                case WAVE_OUT:
-                    mTextView.setText(getString(R.string.pose_waveout));
-                    break;
-                case FINGERS_SPREAD:
-                    mTextView.setText(getString(R.string.pose_fingersspread));
-                    break;
-            }
-
-            if (pose != Pose.UNKNOWN && pose != Pose.REST) {
-                // Tell the Myo to stay unlocked until told otherwise. We do that here so you can
-                // hold the poses without the Myo becoming locked.
-                myo.unlock(Myo.UnlockType.HOLD);
-
-                // Notify the Myo that the pose has resulted in an action, in this case changing
-                // the text on the screen. The Myo will vibrate.
-                myo.notifyUserAction();
-            } else {
-                // Tell the Myo to stay unlocked only for a short period. This allows the Myo to
-                // stay unlocked while poses are being performed, but lock after inactivity.
-                myo.unlock(Myo.UnlockType.TIMED);
-            }
-        }
     };
     private LineGraphSeries<DataPoint> xSeries;
 
@@ -206,37 +170,42 @@ public class SpotifyAuth extends Activity implements
         super.onCreate(savedInstanceState);
         setContentView(R.layout.activity_main);
 
-        xSeries = new LineGraphSeries<>();
+        //graphInit();
+        titleView = (TextView) findViewById(R.id.myTitle);
+        imageView = (ImageView) findViewById(R.id.pictureImage);
+        imageView.setImageResource((R.drawable.bitcamp));
 
-        GraphView graph = (GraphView) findViewById(R.id.graph);
+        timerTask = new TimerTask() {
+            @Override
+            public void run() {
+                diffForSong = Math.abs(max_val - min_val);
+                min_val = 90;
+                max_val = -90;
+                if (diffForSong != 180) checkMovementType(diffForSong);
+            }
+        };
+
+        initializeHub();
+        spotifyLogin();
+        statusImage = (ImageView) findViewById(R.id.status_light);
+        statusImage.setImageResource(R.drawable.red_light);
+        statusImage.bringToFront();
+
+        //getActionBar().setIcon(R.drawable.my_icon);
+    }
+
+    private void graphInit() {
+        xSeries = new LineGraphSeries<>();
+        GraphView graph = null;// = (GraphView) findViewById(R.id.graph);
         graph.addSeries(xSeries);
         xSeries.setColor(Color.GREEN);
 
         graph.getViewport().setXAxisBoundsManual(true);
         graph.getViewport().setMinX(0);
         graph.getViewport().setMaxX(100);
+    }
 
-        mLockStateView = (TextView) findViewById(R.id.lock_state);
-        mTextView = (TextView) findViewById(R.id.text);
-        myNumber = (TextView) findViewById(R.id.number);
-        myMax = (TextView) findViewById(R.id.max);
-        myMin = (TextView) findViewById(R.id.min);
-
-        TimerTask timerTask  = new TimerTask() {
-            @Override
-            public void run() {
-                diffForSong = Math.abs(max_val - min_val);
-                min_val = 90;
-                max_val = -90;
-                checkMovementType(diffForSong);
-            }
-        };
-
-        Timer timer = new Timer();
-        timer.scheduleAtFixedRate(timerTask, 5000, 5000);
-
-        initializeHub();
-
+    private void spotifyLogin() {
         AuthenticationRequest.Builder builder = new AuthenticationRequest.Builder(CLIENT_ID,
                 AuthenticationResponse.Type.TOKEN,
                 REDIRECT_URI);
@@ -247,14 +216,24 @@ public class SpotifyAuth extends Activity implements
     }
 
     private void checkMovementType(double diffForSong) {
-       if (diffForSong <= WALKING_TIME) {
-           //TODO play walking song
+       if (mode != Mode.WALKING && diffForSong <= WALKING_TIME) {
+           mode = Mode.WALKING;
+           if (! mPlayer.isShutdown() ) {
+               mPlayer.play("spotify:user:123398983:playlist:66OgOHEL6OJlY02ClEvmF1");
+           }
            Log.d(TAG, "walking song");
-       } else if (diffForSong > WALKING_TIME && diffForSong <= JOGGING_TIME) {
-            //TODO play jogging song
+       } else if (mode != Mode.JOGGING && diffForSong > WALKING_TIME && diffForSong <= RUNNING_TIME) {
+           mode = Mode.JOGGING;
+           if (! mPlayer.isShutdown() ) {
+               mPlayer.play("spotify:user:spotify:playlist:5p9ILyu1wb4KKHORoXU8nb");
+           }
+
            Log.d(TAG, "jogging song");
-        } else if (diffForSong > RUNNING_TIME) {
-           //TODO play running song
+        } else if (mode != Mode.RUNNING && diffForSong > RUNNING_TIME) {
+           mode = Mode.RUNNING;
+           if (! mPlayer.isShutdown() ) {
+               mPlayer.play("spotify:user:spotify:playlist:6RsopNg2yrLjKiu00jaCyi");
+           }
            Log.d(TAG, "running song");
        }
     }
@@ -276,19 +255,22 @@ public class SpotifyAuth extends Activity implements
 
     @Override
     public boolean onCreateOptionsMenu(Menu menu) {
-        Log.d("SpotifyAuth", "onCreateOptionsMenu");
+        Log.d("MainActivity", "onCreateOptionsMenu");
         super.onCreateOptionsMenu(menu);
         MenuInflater inflater = getMenuInflater();
-        inflater.inflate(R.menu.main_menu, menu);
+        inflater.inflate(R.menu.menu_main, menu);
         return true;
     }
 
     public boolean onOptionsItemSelected(MenuItem item) {
-        Log.d("SpotifyAuth", "onOptionsItemSelected");
+        Log.d("MainActivity", "onOptionsItemSelected");
         int id = item.getItemId();
         if (R.id.action_scan == id) {
             onScanActionSelected();
             return true;
+        } else if (R.id.action_logout == id) {
+            AuthenticationClient.clearCookies(this);
+            finish();
         }
         return super.onOptionsItemSelected(item);
     }
@@ -311,9 +293,10 @@ public class SpotifyAuth extends Activity implements
                     @Override
                     public void onInitialized(Player player) {
                         mPlayer = player;
-                        mPlayer.addConnectionStateCallback(SpotifyAuth.this);
-                        mPlayer.addPlayerNotificationCallback(SpotifyAuth.this);
-                        mPlayer.play("spotify:track:2TpxZ7JUBn3uw46aR7qd6V");
+                        mPlayer.addConnectionStateCallback(MainActivity.this);
+                        mPlayer.addPlayerNotificationCallback(MainActivity.this);
+                        mPlayer.play("spotify:track:3GTXok0dIm0mMqBiVklBYS");
+                        mPlayer.setShuffle(true);
                     }
 
                     @Override
@@ -338,6 +321,7 @@ public class SpotifyAuth extends Activity implements
     @Override
     public void onLoginFailed(Throwable error) {
         Log.d("MainActivity", "Login failed");
+        spotifyLogin();
     }
 
     @Override
@@ -353,6 +337,12 @@ public class SpotifyAuth extends Activity implements
     @Override
     public void onPlaybackEvent(EventType eventType, PlayerState playerState) {
         Log.d("MainActivity", "Playback event received: " + eventType.name());
+        if (eventType.name().equals("TRACK_CHANGED")) {
+            curr_track_id = playerState.trackUri;
+            Log.d(TAG, "trackUri: " + playerState.trackUri.substring(14));
+            String url = "https://api.spotify.com/v1/tracks/" + curr_track_id.substring(14);
+            (new NetworkTasks(false)).execute(url);
+        }
     }
 
     @Override
@@ -372,11 +362,79 @@ public class SpotifyAuth extends Activity implements
         onScanActionSelected();
     }
 
-    public void resetMinMax(View view) {
-        myNumber.setText("");
-        myMin.setText("90");
-        myMax.setText("-90");
-        min_val = 90;
-        max_val = -90;
+    public void startWorkout(View view) {
+        if (! connected) return;
+        if (! workoutStarted) {
+            Log.d(TAG, "starting workout");
+            mode = Mode.DEFAULT;
+            Timer timer = new Timer();
+            timer.scheduleAtFixedRate(timerTask, 300, WAKEUP_INTERVAL);
+            workoutStarted = true;
+        }
+    }
+
+
+    private class NetworkTasks extends AsyncTask<String, String, String> {
+        private boolean forPicture;
+
+        public NetworkTasks(boolean forPicture) {
+            this.forPicture = forPicture;
+        }
+
+        @Override
+        protected String  doInBackground(String... url) {
+            try {
+                if (!forPicture) {
+                    return (new HttpsClient()).testIt(url[0]);
+                } else {
+                    InputStream is = (InputStream) new URL(url[0]).getContent();
+                    tempImageSrc = Drawable.createFromStream(is, "src name");
+                    return null;
+                }
+                //return (new HttpsClient()).sendGet(url[0]);
+
+            } catch (Exception e) {
+                e.printStackTrace();
+                return null;
+            }
+        }
+
+        @Override
+        protected void onPostExecute(String response) {
+            if (forPicture) {
+                displayImageFromWebOperations();
+            } else {
+                processResponse(response);
+            }
+        }
+    }
+
+    private void processResponse(String response){
+        try {
+            JSONObject jsonObject = new JSONObject(response);
+            String  imageUrl = jsonObject.getJSONObject("album").getJSONArray("images").getJSONObject(0).getString("url");
+            String artist = jsonObject.getJSONArray("artists").getJSONObject(0).getString("name");
+            String title = jsonObject.getString("name");
+
+            Log.d(TAG, artist + " - " + title);
+            titleView.setText(artist + " - " + title);
+
+            (new NetworkTasks(true)).execute(imageUrl);
+            Log.d(TAG, "url: " + imageUrl);
+        }catch (Exception e) {
+            Log.d(TAG, "Exception, image not set");
+            imageView.setImageResource((R.drawable.bitcamp));
+            e.printStackTrace();
+        }
+    }
+
+    public void displayImageFromWebOperations() {
+        if (tempImageSrc != null) {
+            imageView.setImageDrawable(tempImageSrc);
+            Log.d(TAG, "image set");
+        } else {
+            Log.d(TAG, "image  not set, drawable null");
+            imageView.setImageResource((R.drawable.bitcamp));
+        }
     }
 }
