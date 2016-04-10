@@ -1,14 +1,15 @@
 package beats4u.com.workoutbeats;
 
 import android.app.Activity;
-import android.bluetooth.BluetoothClass;
 import android.content.Intent;
 import android.graphics.Color;
 import android.os.Bundle;
+import android.support.annotation.Nullable;
 import android.util.Log;
 import android.view.Menu;
 import android.view.MenuInflater;
 import android.view.MenuItem;
+import android.view.View;
 import android.widget.TextView;
 import android.widget.Toast;
 
@@ -170,6 +171,7 @@ public class SpotifyAuth extends Activity implements
         super.onCreate(savedInstanceState);
         setContentView(R.layout.activity_main);
 
+
         mLockStateView = (TextView) findViewById(R.id.lock_state);
         mTextView = (TextView) findViewById(R.id.text);
 
@@ -186,6 +188,8 @@ public class SpotifyAuth extends Activity implements
 
     private void initializeHub() {
         Hub hub = Hub.getInstance();
+        Hub.getInstance().setLockingPolicy(Hub.LockingPolicy.NONE);
+
         if (!hub.init(this)) {
             Toast.makeText(this, "Couldn't initialize Hub", Toast.LENGTH_LONG).show();
             finish();
@@ -199,15 +203,17 @@ public class SpotifyAuth extends Activity implements
 
     @Override
     public boolean onCreateOptionsMenu(Menu menu) {
+        Log.d("SpotifyAuth", "onCreateOptionsMenu");
         super.onCreateOptionsMenu(menu);
         MenuInflater inflater = getMenuInflater();
-        inflater.inflate(R.menu.menu_main, menu);
+        inflater.inflate(R.menu.main_menu, menu);
         return true;
     }
 
     public boolean onOptionsItemSelected(MenuItem item) {
+        Log.d("SpotifyAuth", "onOptionsItemSelected");
         int id = item.getItemId();
-        if (R.id.myosdk__action_scan == id) {
+        if (R.id.action_scan == id) {
             onScanActionSelected();
             return true;
         }
@@ -287,5 +293,9 @@ public class SpotifyAuth extends Activity implements
         if (isFinishing()) Hub.getInstance().shutdown();
         Spotify.destroyPlayer(this);
         super.onDestroy();
+    }
+
+    public void showScan(View view) {
+        onScanActionSelected();
     }
 }
