@@ -11,23 +11,77 @@
         android:textSize="20dp"
         android:layout_width="wrap_content"
         android:layout_height="wrap_content"
-        android:layout_marginTop="34dp"
-        android:layout_gravity="top|center_horizontal"
+        android:layout_gravity="center_vertical"
+        android:gravity="center"
         tools:ignore="SpUsage"
-        android:layout_alignParentTop="true"
-        android:layout_centerHorizontal="true" />
+        android:layout_alignParentTop="true"/>
 
     <TextView
         android:id="@+id/text"
         android:text="@string/hello_world"
-        android:textSize="50dp"
+        android:textSize="20dp"
         android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        tools:ignore="SpUsage"
+        android:layout_alignParentTop="true"
+        android:layout_alignParentEnd="true"/>
+
+    <LinearLayout
+        android:id="@+id/group1"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:orientation="horizontal"
+        android:weightSum="3"
+        android:layout_below="@id/lock_state">
+
+    <TextView
+        android:id="@+id/number"
+        android:text="NuM"
+        android:textSize="20dp"
+        android:layout_width="0dp"
         android:layout_height="wrap_content"
         android:layout_gravity="center"
         tools:ignore="SpUsage"
-        android:layout_below="@+id/lock_state"
-        android:layout_centerHorizontal="true"
-        android:layout_marginTop="72dp" />
+        android:layout_weight="1"/>
+
+    <TextView
+        android:id="@+id/min"
+        android:text="MIN"
+        android:textSize="20dp"
+        android:layout_width="0dp"
+        android:layout_height="wrap_content"
+        android:layout_gravity="center"
+        tools:ignore="SpUsage"
+        android:layout_weight="1"/>
+
+    <TextView
+        android:id="@+id/max"
+        android:text="MAX"
+        android:textSize="20dp"
+        android:layout_width="0dp"
+        android:layout_height="wrap_content"
+        android:layout_gravity="center"
+        tools:ignore="SpUsage"
+        android:layout_weight="1"/>
+    </LinearLayout>
+
+    <com.jjoe64.graphview.GraphView
+        android:layout_width="match_parent"
+        android:layout_height="200dip"
+        android:id="@+id/graph"
+        android:layout_alignParentStart="true"
+        android:layout_above="@+id/button"
+        android:layout_below="@id/group1" />
+
+    <Button
+        android:id="@+id/rest"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:layout_alignParentEnd="true"
+        android:layout_alignParentBottom="true"
+        android:onClick="resetMinMax"
+        android:text="reset"/>
+
 
     <Button
         android:layout_width="match_parent"
@@ -35,8 +89,8 @@
         android:text= "Connect Myo"
         android:id="@+id/button"
         android:gravity="center"
+        android:layout_toLeftOf="@+id/rest"
         android:layout_alignParentBottom="true"
         android:onClick="showScan"/>
-
 
 </RelativeLayout>

@@ -4,7 +4,6 @@ import android.app.Activity;
 import android.content.Intent;
 import android.graphics.Color;
 import android.os.Bundle;
-import android.support.annotation.Nullable;
 import android.util.Log;
 import android.view.Menu;
 import android.view.MenuInflater;
@@ -13,6 +12,9 @@ import android.view.View;
 import android.widget.TextView;
 import android.widget.Toast;
 
+import com.jjoe64.graphview.GraphView;
+import com.jjoe64.graphview.series.DataPoint;
+import com.jjoe64.graphview.series.LineGraphSeries;
 import com.spotify.sdk.android.authentication.AuthenticationClient;
 import com.spotify.sdk.android.authentication.AuthenticationRequest;
 import com.spotify.sdk.android.authentication.AuthenticationResponse;
@@ -32,6 +34,9 @@ import com.thalmic.myo.Quaternion;
 import com.thalmic.myo.XDirection;
 import com.thalmic.myo.scanner.ScanActivity;
 
+import java.util.Timer;
+import java.util.TimerTask;
+
 public class SpotifyAuth extends Activity implements
         PlayerNotificationCallback, ConnectionStateCallback {
 
@@ -43,11 +48,25 @@ public class SpotifyAuth extends Activity implements
     // Can be any integer
     private static final int REQUEST_CODE = 1337;
     private static final String TAG = "SpotifiyAuth";
+    private static final double WALKING_TIME = 40;
+    private static final double JOGGING_TIME = 60;
+    private static final double RUNNING_TIME = 80;
 
     private Player mPlayer;
 
     private TextView mTextView;
     private TextView mLockStateView;
+    private TextView myNumber;
+    private TextView myMax, myMin;
+    private double t = 0;
+    private int t_max = 500;
+
+    //stores most recent min and max values
+    private static double min_val = 90;
+    private static double max_val = -90;
+
+    private double diffForSong;
+
     // For Myo
     private DeviceListener mlistener =  new AbstractDeviceListener() {
         // onConnect() is called whenever a Myo has been connected.
@@ -102,18 +121,30 @@ public class SpotifyAuth extends Activity implements
             float pitch = (float) Math.toDegrees(Quaternion.pitch(rotation));
             float yaw = (float) Math.toDegrees(Quaternion.yaw(rotation));
             //Log.d(TAG, "roll: " + roll + "pitch: " + pitch + "yaw: " + yaw);
-            Log.d(TAG, "x: " + rotation.x() + " y: " + rotation.y() +  " z: " + rotation.z());
+            //Log.d(TAG, "x: " + rotation.x() + " y: " + rotation.y() +  " z: " + rotation.z());
+            double x = rotation.x();
+            double y = rotation.y();
+
+            if (t > 5 &&  pitch < min_val) {
+                min_val = pitch;
+            }
+
+            if (t > 5 && pitch > max_val) {
+                max_val = pitch;
+            }
+
+            myNumber.setText(pitch + "");
+            myMax.setText("" + min_val);
+            myMin.setText("" + max_val);
+
+            xSeries.appendData(new DataPoint(t, pitch), true, t_max);
+            t += 1;
 
             // Adjust roll and pitch for the orientation of the Myo on the arm.
             if (myo.getXDirection() == XDirection.TOWARD_ELBOW) {
                 roll *= -1;
                 pitch *= -1;
             }
-
-            // Next, we apply a rotation to the text view using the roll, pitch, and yaw.
-            mTextView.setRotation(roll);
-            mTextView.setRotationX(pitch);
-            mTextView.setRotationY(yaw);
         }
 
         // onPose() is called whenever a Myo provides a new pose.
@@ -167,6 +198,7 @@ public class SpotifyAuth extends Activity implements
             }
         }
     };
+    private LineGraphSeries<DataPoint> xSeries;
 
 
     @Override
@@ -174,9 +206,34 @@ public class SpotifyAuth extends Activity implements
         super.onCreate(savedInstanceState);
         setContentView(R.layout.activity_main);
 
+        xSeries = new LineGraphSeries<>();
+
+        GraphView graph = (GraphView) findViewById(R.id.graph);
+        graph.addSeries(xSeries);
+        xSeries.setColor(Color.GREEN);
+
+        graph.getViewport().setXAxisBoundsManual(true);
+        graph.getViewport().setMinX(0);
+        graph.getViewport().setMaxX(100);
 
         mLockStateView = (TextView) findViewById(R.id.lock_state);
         mTextView = (TextView) findViewById(R.id.text);
+        myNumber = (TextView) findViewById(R.id.number);
+        myMax = (TextView) findViewById(R.id.max);
+        myMin = (TextView) findViewById(R.id.min);
+
+        TimerTask timerTask  = new TimerTask() {
+            @Override
+            public void run() {
+                diffForSong = Math.abs(max_val - min_val);
+                min_val = 90;
+                max_val = -90;
+                checkMovementType(diffForSong);
+            }
+        };
+
+        Timer timer = new Timer();
+        timer.scheduleAtFixedRate(timerTask, 5000, 5000);
 
         initializeHub();
 
@@ -187,6 +244,19 @@ public class SpotifyAuth extends Activity implements
         AuthenticationRequest request = builder.build();
 
         AuthenticationClient.openLoginActivity(this, REQUEST_CODE, request);
+    }
+
+    private void checkMovementType(double diffForSong) {
+       if (diffForSong <= WALKING_TIME) {
+           //TODO play walking song
+           Log.d(TAG, "walking song");
+       } else if (diffForSong > WALKING_TIME && diffForSong <= JOGGING_TIME) {
+            //TODO play jogging song
+           Log.d(TAG, "jogging song");
+        } else if (diffForSong > RUNNING_TIME) {
+           //TODO play running song
+           Log.d(TAG, "running song");
+       }
     }
 
     private void initializeHub() {
@@ -300,5 +370,13 @@ public class SpotifyAuth extends Activity implements
 
     public void showScan(View view) {
         onScanActionSelected();
+    }
+
+    public void resetMinMax(View view) {
+        myNumber.setText("");
+        myMin.setText("90");
+        myMax.setText("-90");
+        min_val = 90;
+        max_val = -90;
     }
 }
